@@ -14,7 +14,7 @@ Esta é uma aplicação web desenvolvida para automatizar o cálculo de margem d
 
 ## 🚀 Como acessar
 O projeto está hospedado na nuvem e pode ser acessado em tempo real através do link:
-*(Após fazermos o deploy, você colará o link aqui)*
+https://gestao-rentabilidade-lpntcrvsqjiv8qvsydgugy.streamlit.app/
 
 ## 💡 Sobre o Desenvolvimento
 Este projeto reflete minha transição de carreira para a tecnologia, focando em **resolver problemas reais de negócio** através de automação e análise de dados. Durante o desenvolvimento, priorizei a experiência do usuário, garantindo que a ferramenta fosse multiplataforma.
