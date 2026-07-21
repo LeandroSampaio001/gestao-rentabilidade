@@ -9,12 +9,19 @@ st.set_page_config(page_title="Gestão de Rentabilidade", layout="wide")
 st.title("🚀 Sistema de Gestão de Rentabilidade")
 st.markdown("---")
 
-def validar_arquivo(df, colunas_esperadas, nome_arquivo):
-    """Verifica se as colunas necessárias estão presentes no CSV."""
+# Instruções claras para guiar o usuário iterativamente
+st.markdown("### 📋 Instruções de Uso")
+st.info(
+    "1. **Primeiro arquivo:** Carregue abaixo a sua **planilha de vendas**.\n"
+    "2. **Segundo arquivo:** Carregue abaixo a sua **planilha de custos**."
+)
+
+def validar_arquivo(df, colunas_esperadas, nome_planilha):
+    """Verifica se as colunas necessárias estão presentes no CSV especificado."""
     colunas_faltantes = [col for col in colunas_esperadas if col not in df.columns]
     if colunas_faltantes:
-        return False, f"O arquivo '{nome_arquivo}' está faltando as colunas: {', '.join(colunas_faltantes)}"
-    return True, "Validado"
+        return False, f"Erro na coluna: Na **{nome_planilha}**, está faltando a(s) seguinte(s) coluna(s) obrigatória(s): {', '.join(colunas_faltantes)}."
+    return True, "Validado com sucesso!"
 
 def gerar_pdf(df):
     """Gera um PDF em memória com os resultados da análise."""
@@ -37,58 +44,66 @@ def gerar_pdf(df):
         pdf.cell(90, 10, str(row['LUCRO_LIQUIDO']), 1)
         pdf.ln()
         
-    # Retorna o PDF como bytes para o botão de download
     return pdf.output(dest='S').encode('latin1')
 
-# Definição das colunas esperadas para cada arquivo
+# Definição rigorosa das colunas esperadas para cada tipo de planilha
 colunas_vendas = ['SKU', 'VALOR_VENDA_BRUTO']
 colunas_custos = ['SKU', 'PRECO_CUSTO', 'TAXA_PLATAFORMA', 'VALOR_FRETE', 'CUSTO_EMBALAGEM']
 
-# Upload dos arquivos
+# Layout de Upload dividido em colunas na tela
 col1, col2 = st.columns(2)
 with col1:
-    file_vendas = st.file_uploader("Carregue o CSV de Vendas", type="csv")
+    file_vendas = st.file_uploader("1️⃣ Carregar Planilha de Vendas (CSV)", type="csv")
 with col2:
-    file_custos = st.file_uploader("Carregue o CSV de Custos", type="csv")
+    file_custos = st.file_uploader("2️⃣ Carregar Planilha de Custos (CSV)", type="csv")
 
-if file_vendas and file_custos:
+# Validação individual para dar feedback preciso caso o usuário inverta os arquivos
+if file_vendas or file_custos:
     try:
-        # Carregamento
-        df_vendas = pd.read_csv(file_vendas)
-        df_custos = pd.read_csv(file_custos)
-
-        # Validação
-        valido_vendas, msg_vendas = validar_arquivo(df_vendas, colunas_vendas, "Vendas")
-        valido_custos, msg_custos = validar_arquivo(df_custos, colunas_custos, "Custos")
-
-        if not valido_vendas:
-            st.error(msg_vendas)
-        elif not valido_custos:
-            st.error(msg_custos)
+        # Se faltou um dos arquivos
+        if not file_vendas:
+            st.warning("⚠️ Aguardando o carregamento da **Planilha de Vendas** (primeiro arquivo).")
+        elif not file_custos:
+            st.warning("⚠️ Aguardando o carregamento da **Planilha de Custos** (segundo arquivo).")
         else:
-            # Processamento
-            df_vendas['VALOR_VENDA_BRUTO'] = pd.to_numeric(df_vendas['VALOR_VENDA_BRUTO'].astype(str).str.replace(';', '').str.replace(',', '.'), errors='coerce')
-            
-            # Merge
-            df_final = pd.merge(df_vendas, df_custos, on='SKU')
-            
-            # Cálculo de métricas
-            df_final['CUSTO_TOTAL'] = df_final[['PRECO_CUSTO', 'TAXA_PLATAFORMA', 'VALOR_FRETE', 'CUSTO_EMBALAGEM']].sum(axis=1)
-            df_final['LUCRO_LIQUIDO'] = df_final['VALOR_VENDA_BRUTO'] - df_final['CUSTO_TOTAL']
+            # Ambos carregados, hora de processar com segurança
+            df_vendas = pd.read_csv(file_vendas)
+            df_custos = pd.read_csv(file_custos)
 
-            st.success("✅ Dados processados com sucesso!")
-            st.subheader("📊 Resultado da Análise")
-            st.dataframe(df_final[['SKU', 'LUCRO_LIQUIDO']])
+            # Validar separadamente para mensurar o erro exato
+            valido_vendas, msg_vendas = validar_arquivo(df_vendas, colunas_vendas, "Planilha de Vendas")
+            valido_custos, msg_custos = validar_arquivo(df_custos, colunas_custos, "Planilha de Custos")
 
-            # Botão de Download do PDF funcional
-            pdf_bytes = gerar_pdf(df_final)
-            st.download_button(
-                label="📥 Baixar Relatório em PDF",
-                data=pdf_bytes,
-                file_name="relatorio_rentabilidade.pdf",
-                mime="application/pdf"
-            )
+            if not valido_vendas:
+                st.error(f"❌ **Erro no carregamento da primeira planilha:** {msg_vendas}")
+                st.info("💡 Dica: Verifique se você não inverteu os arquivos de Vendas e Custos.")
+            elif not valido_custos:
+                st.error(f"❌ **Erro no carregamento da segunda planilha:** {msg_custos}")
+                st.info("💡 Dica: Verifique se você não inverteu os arquivos de Vendas e Custos.")
+            else:
+                # Processamento limpo e seguro
+                df_vendas['VALOR_VENDA_BRUTO'] = pd.to_numeric(df_vendas['VALOR_VENDA_BRUTO'].astype(str).str.replace(';', '').str.replace(',', '.'), errors='coerce')
+                
+                # Merge dos dados
+                df_final = pd.merge(df_vendas, df_custos, on='SKU')
+                
+                # Cálculos
+                df_final['CUSTO_TOTAL'] = df_final[['PRECO_CUSTO', 'TAXA_PLATAFORMA', 'VALOR_FRETE', 'CUSTO_EMBALAGEM']].sum(axis=1)
+                df_final['LUCRO_LIQUIDO'] = df_final['VALOR_VENDA_BRUTO'] - df_final['CUSTO_TOTAL']
+
+                st.success("✅ Dados processados com sucesso!")
+                st.subheader("📊 Resultado da Análise de Rentabilidade")
+                st.dataframe(df_final[['SKU', 'LUCRO_LIQUIDO']])
+
+                # Botão de Download do PDF
+                pdf_bytes = gerar_pdf(df_final)
+                st.download_button(
+                    label="📥 Baixar Relatório em PDF",
+                    data=pdf_bytes,
+                    file_name="relatorio_rentabilidade.pdf",
+                    mime="application/pdf"
+                )
 
     except Exception as e:
-        st.error(f"Ocorreu um erro inesperado ao processar os arquivos: {e}")
-        st.warning("Verifique se o formato dos seus arquivos CSV está correto.")
+        st.error(f"❌ Ocorreu um erro técnico inesperado ao processar os arquivos: {e}")
+        st.warning("Verifique se os arquivos enviados estão corrompidos ou se utilizam separadores inválidos.")
