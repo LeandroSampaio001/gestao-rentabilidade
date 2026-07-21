@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+from fpdf import FPDF
+import io
 
 # Configuração da página para um visual profissional
 st.set_page_config(page_title="Gestão de Rentabilidade", layout="wide")
@@ -13,6 +15,30 @@ def validar_arquivo(df, colunas_esperadas, nome_arquivo):
     if colunas_faltantes:
         return False, f"O arquivo '{nome_arquivo}' está faltando as colunas: {', '.join(colunas_faltantes)}"
     return True, "Validado"
+
+def gerar_pdf(df):
+    """Gera um PDF em memória com os resultados da análise."""
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    
+    # Cabeçalho do Relatório
+    pdf.cell(200, 10, txt="Relatorio de Gestao de Rentabilidade", ln=True, align="C")
+    pdf.ln(10)
+    
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(100, 10, "SKU", 1)
+    pdf.cell(90, 10, "Lucro Liquido", 1)
+    pdf.ln()
+    
+    pdf.set_font("Arial", "", 12)
+    for index, row in df.iterrows():
+        pdf.cell(100, 10, str(row['SKU']), 1)
+        pdf.cell(90, 10, str(row['LUCRO_LIQUIDO']), 1)
+        pdf.ln()
+        
+    # Retorna o PDF como bytes para o botão de download
+    return pdf.output(dest='S').encode('latin1')
 
 # Definição das colunas esperadas para cada arquivo
 colunas_vendas = ['SKU', 'VALOR_VENDA_BRUTO']
@@ -41,7 +67,6 @@ if file_vendas and file_custos:
             st.error(msg_custos)
         else:
             # Processamento
-            # Limpeza de dados de forma segura
             df_vendas['VALOR_VENDA_BRUTO'] = pd.to_numeric(df_vendas['VALOR_VENDA_BRUTO'].astype(str).str.replace(';', '').str.replace(',', '.'), errors='coerce')
             
             # Merge
@@ -55,8 +80,14 @@ if file_vendas and file_custos:
             st.subheader("📊 Resultado da Análise")
             st.dataframe(df_final[['SKU', 'LUCRO_LIQUIDO']])
 
-            if st.button("Gerar Relatório PDF"):
-                st.info("Funcionalidade de exportação em desenvolvimento.")
+            # Botão de Download do PDF funcional
+            pdf_bytes = gerar_pdf(df_final)
+            st.download_button(
+                label="📥 Baixar Relatório em PDF",
+                data=pdf_bytes,
+                file_name="relatorio_rentabilidade.pdf",
+                mime="application/pdf"
+            )
 
     except Exception as e:
         st.error(f"Ocorreu um erro inesperado ao processar os arquivos: {e}")
