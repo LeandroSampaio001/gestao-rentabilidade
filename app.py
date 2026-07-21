@@ -76,10 +76,10 @@ if file_vendas or file_custos:
 
             if not valido_vendas:
                 st.error(f"❌ **Erro no carregamento da primeira planilha:** {msg_vendas}")
-                st.info("💡 Dica: Verifique se você não inverteu os arquivos de Vendas e Custos.")
+                st.warning("💡 **O que fazer:** Clique no **'X'** ao lado do arquivo carregado incorretamente acima para removê-lo e, em seguida, carregue a planilha correta no lugar certo.")
             elif not valido_custos:
                 st.error(f"❌ **Erro no carregamento da segunda planilha:** {msg_custos}")
-                st.info("💡 Dica: Verifique se você não inverteu os arquivos de Vendas e Custos.")
+                st.warning("💡 **O que fazer:** Clique no **'X'** ao lado do arquivo carregado incorretamente acima para removê-lo e, em seguida, carregue a planilha correta no lugar certo.")
             else:
                 # Processamento limpo e seguro
                 df_vendas['VALOR_VENDA_BRUTO'] = pd.to_numeric(df_vendas['VALOR_VENDA_BRUTO'].astype(str).str.replace(';', '').str.replace(',', '.'), errors='coerce')
