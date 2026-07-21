@@ -23,26 +23,58 @@ def validar_arquivo(df, colunas_esperadas, nome_planilha):
         return False, f"Erro na coluna: Na **{nome_planilha}**, está faltando a(s) seguinte(s) coluna(s) obrigatória(s): {', '.join(colunas_faltantes)}."
     return True, "Validado com sucesso!"
 
+class PDFRelatorio(FPDF):
+    def header(self):
+        # Cabeçalho decorativo profissional
+        self.set_fill_color(30, 41, 59) # Azul escuro corporativo
+        self.rect(0, 0, 210, 25, 'F')
+        self.set_font('Arial', 'B', 14)
+        self.set_text_color(255, 255, 255)
+        self.set_xy(10, 8)
+        self.cell(0, 10, 'RELATORIO DE GESTAO DE RENTABILIDADE', 0, 0, 'L')
+        self.ln(25)
+
+    def footer(self):
+        self.set_y(-15)
+        self.set_font('Arial', 'I', 8)
+        self.set_text_color(128, 128, 128)
+        self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
+
 def gerar_pdf(df):
-    """Gera um PDF em memória com os resultados da análise."""
-    pdf = FPDF()
+    """Gera um PDF formatado com linhas alternadas e cores de alerta de lucro."""
+    pdf = PDFRelatorio()
     pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
     
-    # Cabeçalho do Relatório
-    pdf.cell(200, 10, txt="Relatorio de Gestao de Rentabilidade", ln=True, align="C")
-    pdf.ln(10)
+    # Cabeçalho da Tabela
+    pdf.set_font("Arial", "B", 10)
+    pdf.set_fill_color(241, 245, 249)
+    pdf.set_text_color(30, 41, 59)
+    pdf.cell(100, 8, "SKU", 1, 0, 'C', True)
+    pdf.cell(90, 8, "LUCRO LIQUIDO (R$)", 1, 1, 'C', True)
     
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(100, 10, "SKU", 1)
-    pdf.cell(90, 10, "Lucro Liquido", 1)
-    pdf.ln()
+    pdf.set_font("Arial", "", 10)
     
-    pdf.set_font("Arial", "", 12)
     for index, row in df.iterrows():
-        pdf.cell(100, 10, str(row['SKU']), 1)
-        pdf.cell(90, 10, str(row['LUCRO_LIQUIDO']), 1)
-        pdf.ln()
+        sku = str(row['SKU'])
+        lucro = float(row['LUCRO_LIQUIDO'])
+        
+        # Cores de fundo alternadas (Zebra: Branco e Cinza claro)
+        if index % 2 == 0:
+            pdf.set_fill_color(255, 255, 255)
+        else:
+            pdf.set_fill_color(248, 250, 252)
+            
+        # Cores condicionais baseadas na rentabilidade:
+        # Verde (> 20), Amarelo (0 a 20), Vermelho (< 0 / Prejuizo)
+        if lucro > 20:
+            pdf.set_text_color(22, 101, 52)     # Verde escuro legível
+        elif lucro >= 0:
+            pdf.set_text_color(161, 98, 7)      # Amarelo/Laranja escuro legível
+        else:
+            pdf.set_text_color(185, 28, 28)     # Vermelho escuro legível
+            
+        pdf.cell(100, 8, sku, 1, 0, 'C', True)
+        pdf.cell(90, 8, f"R$ {lucro:.2f}", 1, 1, 'C', True)
         
     return pdf.output(dest='S').encode('latin1')
 
@@ -95,10 +127,10 @@ if file_vendas or file_custos:
                 st.subheader("📊 Resultado da Análise de Rentabilidade")
                 st.dataframe(df_final[['SKU', 'LUCRO_LIQUIDO']])
 
-                # Botão de Download do PDF
+                # Botão de Download do PDF customizado
                 pdf_bytes = gerar_pdf(df_final)
                 st.download_button(
-                    label="📥 Baixar Relatório em PDF",
+                    label="📥 Baixar Relatório em PDF Profissional",
                     data=pdf_bytes,
                     file_name="relatorio_rentabilidade.pdf",
                     mime="application/pdf"
