@@ -41,16 +41,17 @@ class PDFRelatorio(FPDF):
         self.cell(0, 10, f'Pagina {self.page_no()}', 0, 0, 'C')
 
 def gerar_pdf(df):
-    """Gera um PDF formatado com linhas alternadas e cores de alerta de lucro."""
+    """Gera um PDF formatado com linhas zebradas e coluna de status colorida."""
     pdf = PDFRelatorio()
     pdf.add_page()
     
-    # Cabeçalho da Tabela
+    # Cabeçalho da Tabela (3 colunas: SKU, Valor e Status Textual)
     pdf.set_font("Arial", "B", 10)
     pdf.set_fill_color(241, 245, 249)
     pdf.set_text_color(30, 41, 59)
-    pdf.cell(100, 8, "SKU", 1, 0, 'C', True)
-    pdf.cell(90, 8, "LUCRO LIQUIDO (R$)", 1, 1, 'C', True)
+    pdf.cell(60, 8, "SKU", 1, 0, 'C', True)
+    pdf.cell(65, 8, "LUCRO LIQUIDO (R$)", 1, 0, 'C', True)
+    pdf.cell(65, 8, "STATUS", 1, 1, 'C', True)
     
     pdf.set_font("Arial", "", 10)
     
@@ -64,17 +65,23 @@ def gerar_pdf(df):
         else:
             pdf.set_fill_color(248, 250, 252)
             
-        # Cores condicionais baseadas na rentabilidade:
-        # Verde (> 20), Amarelo (0 a 20), Vermelho (< 0 / Prejuizo)
+        # SKU e Valor mantêm cor padrão escura corporativa
+        pdf.set_text_color(30, 41, 59)
+        pdf.cell(60, 8, sku, 1, 0, 'C', True)
+        pdf.cell(65, 8, f"R$ {lucro:.2f}", 1, 0, 'C', True)
+        
+        # Classificação e definição da cor exclusiva da coluna de status
         if lucro > 20:
-            pdf.set_text_color(22, 101, 52)     # Verde escuro legível
+            status = "Lucrativo"
+            pdf.set_text_color(22, 101, 52)     # Verde escuro
         elif lucro >= 0:
-            pdf.set_text_color(161, 98, 7)      # Amarelo/Laranja escuro legível
+            status = "Pouco Lucrativo"
+            pdf.set_text_color(161, 98, 7)      # Amarelo/Laranja escuro
         else:
-            pdf.set_text_color(185, 28, 28)     # Vermelho escuro legível
+            status = "Prejuizo"
+            pdf.set_text_color(185, 28, 28)     # Vermelho escuro
             
-        pdf.cell(100, 8, sku, 1, 0, 'C', True)
-        pdf.cell(90, 8, f"R$ {lucro:.2f}", 1, 1, 'C', True)
+        pdf.cell(65, 8, status, 1, 1, 'C', True)
         
     return pdf.output(dest='S').encode('latin1')
 
@@ -130,7 +137,7 @@ if file_vendas or file_custos:
                 # Botão de Download do PDF customizado
                 pdf_bytes = gerar_pdf(df_final)
                 st.download_button(
-                    label="📥 Baixar Relatório em PDF Profissional",
+                    label="📥 Baixar Relatório em PDF com Status",
                     data=pdf_bytes,
                     file_name="relatorio_rentabilidade.pdf",
                     mime="application/pdf"
