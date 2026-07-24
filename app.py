@@ -72,15 +72,14 @@ def gerar_pdf(df):
             
         pdf.cell(50, 8, lucro_str, 1, 0, 'C', True)
         
-        # Cores condicionais do status no PDF
         if status == "Lucrativo":
             pdf.set_text_color(22, 101, 52)
         elif status == "Pouco Lucrativo":
             pdf.set_text_color(161, 98, 7)
         elif status == "Prejuizo":
             pdf.set_text_color(185, 28, 28)
-        else:  # Erro
-            pdf.set_text_color(128, 128, 128) # Cinza escuro ou tom de alerta para erro
+        else:
+            pdf.set_text_color(128, 128, 128)
             
         pdf.cell(90, 8, status, 1, 1, 'C', True)
         
@@ -116,10 +115,7 @@ if file_vendas or file_custos:
                 st.error(f"❌ {msg_c}")
                 st.warning("💡 Clique no **'X'** do arquivo de Custos para reenviá-lo corrigido.")
             else:
-                # Mapeamento cirúrgico de erros por linha e célula
-                # Vamos converter e identificar quais linhas possuem falhas numéricas
-                
-                # Cópia temporária para checagem de conversão
+                # Auditoria de células numéricas
                 venda_numerica = pd.to_numeric(
                     df_vendas['VALOR_VENDA_BRUTO'].astype(str).str.replace(';', '').str.replace(',', '.'), 
                     errors='coerce'
@@ -139,50 +135,71 @@ if file_vendas or file_custos:
                             erros_custos_detalhes[idx] = []
                         erros_custos_detalhes[idx].append(col)
 
-                # Se houveram erros nas células, informamos detalhadamente e damos a escolha
+                # Auditoria de SKUs (Divergência entre lotes/semanas)
+                skus_vendas = set(df_vendas['SKU'].astype(str))
+                skus_custos = set(df_custos['SKU'].astype(str))
+                
+                skus_apenas_vendas = skus_vendas - skus_custos
+                skus_apenas_custos = skus_custos - skus_vendas
+                tem_divergencia_lote = len(skus_apenas_vendas) > 0 or len(skus_apenas_custos) > 0
+
+                # Tratamento de Erros de Células
                 if erros_vendas_idx or erros_custos_detalhes:
                     st.warning("⚠️ **Atenção: Encontramos células com dados inválidos ou vazios nas suas planilhas!**")
-                    
                     if erros_vendas_idx:
                         for idx in erros_vendas_idx:
                             sku_afetado = df_vendas.loc[idx, 'SKU'] if 'SKU' in df_vendas.columns else f"Linha {idx+1}"
-                            st.markdown(f"- **Planilha de Vendas:** O produto **{sku_afetado}** (Linha {idx+2} do arquivo) está com valor inválido na coluna `VALOR_VENDA_BRUTO`.")
-                    
+                            st.markdown(f"- **Planilha de Vendas:** O produto **{sku_afetado}** está com valor inválido em `VALOR_VENDA_BRUTO`.")
                     if erros_custos_detalhes:
                         for idx, colunas_afetadas in erros_custos_detalhes.items():
                             sku_afetado = df_custos.loc[idx, 'SKU'] if 'SKU' in df_custos.columns else f"Linha {idx+1}"
-                            cols_str = ', '.join(colunas_afetadas)
-                            st.markdown(f"- **Planilha de Custos:** O produto **{sku_afetado}** (Linha {idx+2} do arquivo) apresenta dados corrompidos/vazios na(s) coluna(s): `{cols_str}`.")
+                            st.markdown(f"- **Planilha de Custos:** O produto **{sku_afetado}** apresenta dados vazios/corrompidos nas colunas: `{', '.join(colunas_afetadas)}`.")
 
+                # Tratamento de Divergência de Lotes/Semanas (Diferença de SKUs)
+                if tem_divergencia_lote:
+                    st.warning("📅 **Atenção: As planilhas parecem ser de períodos ou lotes diferentes!**")
+                    if skus_apenas_vendas:
+                        st.markdown(f"- Há **{len(skus_apenas_vendas)} produto(s)** presentes nas **Vendas**, mas que **não possuem cadastro de custos** (Ex: `{list(skus_apenas_vendas)[:3]}...`).")
+                    if skus_apenas_custos:
+                        st.markdown(f"- Há **{len(skus_apenas_custos)} produto(s)** com custos cadastrados, mas que **não registraram vendas** neste arquivo (Ex: `{list(skus_apenas_custos)[:3]}...`).")
+
+                # Se houver qualquer inconsistência (células erradas ou divergência de lotes), damos opção de controle
+                if erros_vendas_idx or erros_custos_detalhes or tem_divergencia_lote:
                     st.markdown("---")
-                    st.info("💡 **O que você deseja fazer?**")
-                    
-                    # Decisão interativa do usuário via checkbox ou selectbox/botão
+                    st.info("💡 **Como você deseja proceder?**")
                     opcao_usuario = st.radio(
-                        "Escolha uma opção para continuar:",
-                        ("Quero corrigir os arquivos e fazer upload novamente", "Gerar relatório mesmo assim (marcar os afetados com STATUS DE ERRO)")
+                        "Escolha uma opção:",
+                        ("Revisar e corrigir os arquivos", "Prosseguir mesmo assim (processar apenas os itens válidos/compatíveis)")
                     )
 
-                    if opcao_usuario == "Gerar relatório mesmo assim (marcar os afetados com STATUS DE ERRO)":
-                        # Processamento tolerante a falhas marcando com ERRO
-                        df_vendas['VALOR_VENDA_BRUTO_NUM'] = venda_numerica
-                        
-                        for col in colunas_custos_num:
-                            df_custos[f"{col}_NUM"] = pd.to_numeric(
-                                df_custos[col].astype(str).str.replace(';', '').str.replace(',', '.'), 
-                                errors='coerce'
-                            )
-                        
-                        df_final = pd.merge(df_vendas, df_custos, on='SKU', how='inner')
-                        
-                        # Definir custo total somando as colunas numéricas tratadas
+                    if opcao_usuario == "Prosseguir mesmo assim (processar apenas os itens válidos/compatíveis)":
+                        processar_dados = True
+                    else:
+                        processar_dados = False
+                else:
+                    processar_dados = True
+
+                if processar_dados:
+                    # Execução do processamento
+                    df_vendas['VALOR_VENDA_BRUTO_NUM'] = venda_numerica
+                    for col in colunas_custos_num:
+                        df_custos[f"{col}_NUM"] = pd.to_numeric(
+                            df_custos[col].astype(str).str.replace(';', '').str.replace(',', '.'), 
+                            errors='coerce'
+                        )
+                    
+                    # Merge (mantendo alerta transparente)
+                    df_final = pd.merge(df_vendas, df_custos, on='SKU', how='inner')
+                    
+                    if df_final.empty:
+                        st.error("❌ Nenhum SKU em comum foi encontrado entre as planilhas para realizar o cruzamento.")
+                    else:
                         custos_tratados = [f"{col}_NUM" for col in colunas_custos_num]
                         df_final['CUSTO_TOTAL'] = df_final[custos_tratados].sum(axis=1)
                         df_final['LUCRO_LIQUIDO'] = df_final['VALOR_VENDA_BRUTO_NUM'] - df_final['CUSTO_TOTAL']
                         
-                        # Atribuir status dinâmico incluindo a condição de Erro
                         def definir_status(row):
-                            if pd.isna(row['VALOR_VENDA_BRUTO_NUM']) or row[[f"{c}_NUM" for c in colunas_custos_num]].isna().any():
+                            if pd.isna(row['VALOR_VENDA_BRUTO_NUM']) or row[custos_tratados].isna().any():
                                 return "ERRO DE DADOS"
                             lucro = row['LUCRO_LIQUIDO']
                             if lucro > 20:
@@ -194,48 +211,7 @@ if file_vendas or file_custos:
 
                         df_final['STATUS'] = df_final.apply(definir_status, axis=1)
 
-                        st.success("✅ Relatório gerado com itens sinalizados!")
-                        st.subheader("📊 Resultado da Análise com Itens com Erro")
-                        st.dataframe(df_final[['SKU', 'LUCRO_LIQUIDO', 'STATUS']])
-
-                        pdf_bytes = gerar_pdf(df_final)
-                        st.download_button(
-                            label="📥 Baixar Relatório em PDF com Itens de Erro",
-                            data=pdf_bytes,
-                            file_name="relatorio_rentabilidade_erros.pdf",
-                            mime="application/pdf"
-                        )
-                else:
-                    # Caminho feliz: Sem nenhum erro nas células
-                    df_vendas['VALOR_VENDA_BRUTO'] = pd.to_numeric(
-                        df_vendas['VALOR_VENDA_BRUTO'].astype(str).str.replace(';', '').str.replace(',', '.'), 
-                        errors='coerce'
-                    )
-                    for col in colunas_custos_num:
-                        df_custos[col] = pd.to_numeric(
-                            df_custos[col].astype(str).str.replace(';', '').str.replace(',', '.'), 
-                            errors='coerce'
-                        )
-
-                    df_final = pd.merge(df_vendas, df_custos, on='SKU')
-                    
-                    if df_final.empty:
-                        st.error("❌ Nenhum SKU em comum foi encontrado entre as planilhas.")
-                    else:
-                        df_final['CUSTO_TOTAL'] = df_final[colunas_custos_num].sum(axis=1)
-                        df_final['LUCRO_LIQUIDO'] = df_final['VALOR_VENDA_BRUTO'] - df_final['CUSTO_TOTAL']
-                        
-                        def definir_status_limpo(lucro):
-                            if lucro > 20:
-                                return "Lucrativo"
-                            elif lucro >= 0:
-                                return "Pouco Lucrativo"
-                            else:
-                                return "Prejuizo"
-
-                        df_final['STATUS'] = df_final['LUCRO_LIQUIDO'].apply(definir_status_limpo)
-
-                        st.success("✅ Dados processados com sucesso!")
+                        st.success("✅ Processamento concluído com base nos itens compatíveis!")
                         st.subheader("📊 Resultado da Análise de Rentabilidade")
                         st.dataframe(df_final[['SKU', 'LUCRO_LIQUIDO', 'STATUS']])
 
