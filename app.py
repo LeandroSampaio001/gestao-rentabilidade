@@ -8,14 +8,14 @@ from ui.session import init_session_state
 # Configuração da página para renomear o item "app" no menu lateral para "Início"
 st.set_page_config(
     page_title="Gestão de Rentabilidade",
-    page_icon="🏠",
+    page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 init_session_state()
 
-st.title("📂 Início - Gestão de Rentabilidade")
+st.title("📉 - Gestão de Rentabilidade")
 st.markdown("---")
 
 st.markdown("### 🚀 Importação Rápida de Dados")
