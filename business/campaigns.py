@@ -46,12 +46,12 @@ def simular_campanha_lote(
 
 
 def render_campaign_simulator(df: pd.DataFrame):
-    """Interface Streamlit do simulador de campanhas."""
+    """Interface Streamlit do simulador de campanhas e descontos."""
     import streamlit as st
 
-    st.subheader("🎯 Simulador de Campanhas e Descontos")
+    st.subheader("🎉 Promoções e Descontos")
     st.markdown(
-        "Teste percentuais promocionais (Black Friday, cupons, etc.) "
+        "Planeje percentuais promocionais (Black Friday, cupons, queima de estoque) "
         "cruzados com a estrutura de custos para bloquear campanhas inviáveis."
     )
 
@@ -59,7 +59,7 @@ def render_campaign_simulator(df: pd.DataFrame):
         st.warning("Carregue e processe os dados na página de Importação primeiro.")
         return
 
-    tab1, tab2 = st.tabs(["Simulação Individual", "Comparativo em Lote"])
+    tab1, tab2 = st.tabs(["📊 Simulação Individual", "📈 Comparativo em Lote"])
 
     with tab1:
         desconto = st.slider(

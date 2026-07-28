@@ -1,6 +1,7 @@
-"""Simulador de Margem por Concorrência (Buy Box Simulator)."""
+"""Simulador de Margem por Concorrência (Buy Box Simulator) com Configuração Intuitiva."""
 
 import pandas as pd
+import streamlit as st
 
 from config.constants import STATUS_PREJUIZO
 from core.status import definir_status
@@ -64,37 +65,115 @@ def simular_lote_concorrencia(
 
 
 def render_buy_box_simulator(df: pd.DataFrame):
-    """Interface Streamlit do simulador Buy Box."""
-    import streamlit as st
-
-    st.subheader("🏷️ Simulador de Margem por Concorrência (Buy Box)")
+    """Interface Streamlit do simulador Buy Box com configuração guiada de concorrentes."""
+    st.subheader("🎯 Simulador de Concorrência e Buy Box")
     st.markdown(
-        "Simule o impacto de variações de preço de mercado ou do concorrente "
-        "na margem líquida de cada SKU."
+        "Acompanhe os preços e anúncios dos concorrentes para proteger sua margem de lucro."
     )
 
     if df.empty:
-        st.warning("Carregue e processe os dados na página de Importação primeiro.")
+        st.warning("Carregue e processe os dados na página de Início primeiro.")
         return
 
-    tab1, tab2 = st.tabs(["Simulação por SKU", "Simulação em Lote"])
+    # Garante colunas de apoio na sessão para concorrentes
+    if "df_concorrentes_info" not in st.session_state:
+        st.session_state["df_concorrentes_info"] = pd.DataFrame({
+            "SKU": df["SKU"].astype(str),
+            "PRECO_CONCORRENTE": df["VALOR_VENDA_BRUTO_NUM"] * 0.95,
+            "LINK_CONCORRENTE": ""
+        })
 
-    with tab1:
-        skus = df["SKU"].astype(str).tolist()
-        col1, col2 = st.columns(2)
-        with col1:
-            sku_sel = st.selectbox("Selecione o SKU", skus)
-        with col2:
-            row = df[df["SKU"].astype(str) == sku_sel].iloc[0]
-            preco_atual = float(row["VALOR_VENDA_BRUTO_NUM"])
-            preco_conc = st.number_input(
-                "Preço do concorrente (R$)",
-                min_value=0.0,
-                value=round(preco_atual * 0.95, 2),
-                step=1.0,
+    # Bloco Intuitivo: Configurar Loja Concorrente
+    with st.expander("🌐 Configurar Loja Concorrente (Global ou Individual)", expanded=True):
+        st.markdown(
+            "Escolha abaixo como deseja mapear os concorrentes. "
+            "*(Nota: O link serve de atalho para abrir o anúncio; o preço numérico é usado para o cálculo matemático da margem).* "
+            "Não se esqueça de clicar em **Salvar Alterações** após preencher."
+        )
+        
+        tab_global, tab_individual = st.tabs(["🌍 Opção 1: Concorrente Global (Loja Inteira)", "🎯 Opção 2: Concorrente Individual (Por Produto)"])
+        
+        with tab_global:
+            st.markdown("**Como usar:** Insira o link da página principal da loja do concorrente. O sistema criará o atalho estruturado para os SKUs.")
+            url_global = st.text_input(
+                "URL da Loja do Concorrente (Ex: https://perfil.mercadolivre.com.br/SUA-LOJA)",
+                value=st.session_state.get("url_loja_global_concorrente", ""),
+                key="input_url_global_master"
+            )
+            col_g1, col_g2 = st.columns([2, 5])
+            with col_g1:
+                if st.button("🚀 Aplicar Loja Global"):
+                    st.session_state["url_loja_global_concorrente"] = url_global
+                    if url_global:
+                        df_temp = st.session_state["df_concorrentes_info"]
+                        for idx, row in df_temp.iterrows():
+                            sku_val = row["SKU"]
+                            if not row["LINK_CONCORRENTE"] or row["LINK_CONCORRENTE"].strip() == "":
+                                df_temp.at[idx, "LINK_CONCORRENTE"] = f"{url_global.rstrip('/')}/p/{sku_val}"
+                        st.session_state["df_concorrentes_info"] = df_temp
+                        st.success("✅ Links gerados com base na loja global!")
+                    else:
+                        st.warning("Informe uma URL válida.")
+
+        with tab_individual:
+            st.markdown("**Como usar:** Selecione o produto desejado na tabela abaixo, digite o preço praticado pelo concorrente e cole o link exato daquele anúncio.")
+            
+            df_base_edit = df[["SKU"]].copy()
+            if "NOME_PRODUTO" in df.columns:
+                df_base_edit["PRODUTO"] = df["NOME_PRODUTO"]
+            df_base_edit["PREÇO_ATUAL"] = df["VALOR_VENDA_BRUTO_NUM"]
+            
+            df_editavel = pd.merge(df_base_edit, st.session_state["df_concorrentes_info"], on="SKU", how="left")
+            
+            df_resultado_edit = st.data_editor(
+                df_editavel,
+                num_rows="fixed",
+                use_container_width=True,
+                key="tabela_concorrentes_config",
+                column_config={
+                    "LINK_CONCORRENTE": st.column_config.LinkColumn("Link Anúncio Concorrente", display_text="Abrir Anúncio")
+                }
             )
 
-        sim = simular_preco_concorrente(df, sku_sel, preco_conc)
+            if st.button("💾 Salvar Alterações de Concorrentes"):
+                st.session_state["df_concorrentes_info"] = df_resultado_edit[["SKU", "PRECO_CONCORRENTE", "LINK_CONCORRENTE"]]
+                st.success("✅ Alterações salvas com sucesso!")
+
+    # Sincroniza dados de trabalho
+    df_trab = df.copy()
+    df_trab["SKU"] = df_trab["SKU"].astype(str)
+
+    st.markdown("---")
+    tab1, tab3 = st.tabs(["🔍 Simulação Detalhada por SKU", "📊 Simulação Global em Lote (%)"])
+
+    with tab1:
+        skus = df_trab["SKU"].tolist()
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            sku_sel = st.selectbox("Selecione o SKU para analisar", skus, key="sku_simulador_individual")
+        with col_s2:
+            row = df_trab[df_trab["SKU"] == sku_sel].iloc[0]
+            preco_atual = float(row["VALOR_VENDA_BRUTO_NUM"])
+            
+            df_conc_sessao = st.session_state["df_concorrentes_info"]
+            val_salvo = df_conc_sessao.loc[df_conc_sessao["SKU"] == sku_sel, "PRECO_CONCORRENTE"]
+            default_val = float(val_salvo.values[0]) if not val_salvo.empty else round(preco_atual * 0.95, 2)
+
+            preco_conc = st.number_input(
+                "Preço do concorrente para este SKU (R$)",
+                min_value=0.0,
+                value=default_val,
+                step=1.0,
+                key=f"preco_conc_{sku_sel}"
+            )
+
+        # Exibe atalho para o link do anúncio do concorrente se houver
+        link_sku_row = df_conc_sessao.loc[df_conc_sessao["SKU"] == sku_sel, "LINK_CONCORRENTE"]
+        link_sku = str(link_sku_row.values[0]) if not link_sku_row.empty else ""
+        if link_sku and link_sku.startswith("http"):
+            st.markdown(f"🔗 **Atalho:** [Abrir Anúncio do Concorrente deste SKU]({link_sku})")
+
+        sim = simular_preco_concorrente(df_trab, sku_sel, preco_conc)
         if "erro" in sim:
             st.error(sim["erro"])
         else:
@@ -106,7 +185,7 @@ def render_buy_box_simulator(df: pd.DataFrame):
 
             if sim["risco_prejuizo"]:
                 st.error(
-                    f"⚠️ **ALERTA DE RISCO:** Com preço de R$ {preco_conc:.2f}, "
+                    f"⚠️ **ALERTA DE RISCO:** Com o preço de R$ {preco_conc:.2f}, "
                     f"o SKU **{sku_sel}** entraria em **{STATUS_PREJUIZO}**!"
                 )
             elif sim["status_simulado"] == "Pouco Lucrativo":
@@ -116,20 +195,20 @@ def render_buy_box_simulator(df: pd.DataFrame):
             else:
                 st.success(f"✅ Status simulado: **{sim['status_simulado']}**")
 
-    with tab2:
+    with tab3:
         variacao = st.slider(
-            "Variação de preço de mercado (%)",
+            "Variação global de preço de mercado (%)",
             min_value=-50.0,
             max_value=50.0,
             value=-10.0,
             step=1.0,
-            help="Negativo = queda de preço (concorrência). Positivo = aumento.",
+            help="Negativo = queda de preço da concorrência. Positivo = aumento.",
         )
-        df_sim = simular_lote_concorrencia(df, variacao)
+        df_sim = simular_lote_concorrencia(df_trab, variacao)
         em_prejuizo = df_sim[df_sim["STATUS_SIMULADO"] == STATUS_PREJUIZO]
 
         st.metric(
-            "SKUs em risco de prejuízo",
+            "SKUs em risco de prejuízo com esta variação em lote",
             len(em_prejuizo),
             delta=f"{len(em_prejuizo) - len(df_sim[df_sim['STATUS'] == STATUS_PREJUIZO])}",
         )

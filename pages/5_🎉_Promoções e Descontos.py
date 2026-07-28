@@ -7,7 +7,7 @@ from ui.session import dados_disponiveis, get_df_processado, init_session_state
 
 init_session_state()
 
-st.title("🎯 Campanhas e Descontos")
+st.title("🎉 Promoções e Descontos")
 st.markdown("---")
 
 if not dados_disponiveis():
