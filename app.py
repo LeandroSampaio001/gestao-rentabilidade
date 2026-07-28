@@ -5,6 +5,14 @@ import streamlit as st
 
 from ui.session import init_session_state
 
+# Configuração da página para renomear o item "app" no menu lateral para "Início"
+st.set_page_config(
+    page_title="Início - Gestão de Rentabilidade",
+    page_icon="🏠",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
 init_session_state()
 
 st.title("📂 Início - Gestão de Rentabilidade")
